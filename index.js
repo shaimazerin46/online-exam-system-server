@@ -26,10 +26,26 @@ async function run() {
    
     const dbCollection = client.db('examinationSystem');
     const examCollection = dbCollection.collection('exams');
+    const packageCollection = dbCollection.collection('packeges')
 
     app.get('/exams', async (req,res)=>{
-        const result = await examCollection.find().toArray();
+      const search = req.query.search || '';
+      const category = req.query.category || '';
+      const query = {};
+      if(search){
+        query.name = {$regex: search, $options: 'i'};
+      }
+      if(category && category != 'all'){
+        query.category = category;
+      }
+        const result = await examCollection.find(query).toArray();
         res.send(result)
+    });
+
+    // package API
+    app.get('/allPackages', async(req,res)=>{
+      const result = await packageCollection.find().toArray();
+      res.send(result)
     })
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 

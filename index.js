@@ -28,7 +28,8 @@ async function run() {
     const examCollection = dbCollection.collection('exams');
     const packageCollection = dbCollection.collection('packeges');
     const resultCollections = dbCollection.collection('results');
-    const userCollection = dbCollection.collection('users')
+    const userCollection = dbCollection.collection('users');
+    const cqCollection = dbCollection.collection('cq')
 
     app.get('/exams', async (req,res)=>{
       const search = req.query.search || '';
@@ -61,6 +62,12 @@ async function run() {
     app.post('/users', async (req,res)=>{
       const data = req.body;
       const result = await userCollection.insertOne(data);
+      res.send(result)
+    })
+
+    // cq API
+    app.get('/cq', async(req,res)=>{
+      const result = await cqCollection.find().toArray();
       res.send(result)
     })
     console.log("Pinged your deployment. You successfully connected to MongoDB!");

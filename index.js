@@ -8,7 +8,9 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 app.use(cors());
 app.use(express.json());
 
-
+const multer = require('multer');
+const storage = multer.memoryStorage(); // or use diskStorage if you want to store on disk
+const upload = multer();
 
 const uri = `mongodb+srv://${process.env.DB_ADMIN}:${process.env.DB_PASS}@cluster0.qkg2o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -29,7 +31,8 @@ async function run() {
     const packageCollection = dbCollection.collection('packeges');
     const resultCollections = dbCollection.collection('results');
     const userCollection = dbCollection.collection('users');
-    const cqCollection = dbCollection.collection('cq')
+    const cqCollection = dbCollection.collection('cq');
+    const pdfCollection = dbCollection.collection('pdf')
 
     app.get('/exams', async (req,res)=>{
       const search = req.query.search || '';
@@ -70,6 +73,39 @@ async function run() {
       const result = await cqCollection.find().toArray();
       res.send(result)
     })
+
+    // pdf collection
+    app.post('/pdf', upload.any(), async (req, res) => {
+      try {
+          const examId = req.body.examId;
+          const examName = req.body.examName;
+  
+          const answers = [];
+  
+          for (const file of req.files) {
+              const indexMatch = file.fieldname.match(/answers\[(\d+)\]\[file\]/);
+              if (indexMatch) {
+                  const index = indexMatch[1];
+                  answers.push({
+                      fileName: file.originalname,
+                      fileBuffer: file.buffer, // You can convert or store this
+                      
+                  });
+              }
+          }
+  
+          const result = await pdfCollection.insertOne({
+              examId,
+              examName,
+              answers
+          });
+  
+          res.send({ insertedId: result.insertedId });
+      } catch (err) {
+          console.error('Upload error:', err.message);
+          res.status(500).send({ error: 'Something went wrong' });
+      }
+  });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
 

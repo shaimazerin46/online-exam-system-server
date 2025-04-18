@@ -4,12 +4,17 @@ const app = express();
 const cors = require('cors');
 const port = process.env.PORT || 5000;
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const stripe = require('stripe')(process.env.STRIPE_KEY)
 
-app.use(cors());
+const corsOptions = {
+  origin: ['http://localhost:5173', 'https://online-examination-system-server.vercel.app'],
+  credentials: true,
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 const multer = require('multer');
-const storage = multer.memoryStorage(); // or use diskStorage if you want to store on disk
+const storage = multer.memoryStorage(); 
 const upload = multer();
 
 const uri = `mongodb+srv://${process.env.DB_ADMIN}:${process.env.DB_PASS}@cluster0.qkg2o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -32,7 +37,9 @@ async function run() {
     const resultCollections = dbCollection.collection('results');
     const userCollection = dbCollection.collection('users');
     const cqCollection = dbCollection.collection('cq');
-    const pdfCollection = dbCollection.collection('pdf')
+    const pdfCollection = dbCollection.collection('pdf');
+    const paymentCollection = dbCollection.collection('payments');
+    const wishlistCollection = dbCollection.collection('wishlist')
 
     app.get('/exams', async (req,res)=>{
       const search = req.query.search || '';
@@ -48,6 +55,20 @@ async function run() {
         res.send(result)
     });
 
+    // cq API
+    app.get('/cq', async(req,res)=>{
+      const search = req.query.search || '' ;
+      const category = req.query.category || '';
+      const query = {};
+      if(search){
+        query.name= {$regex: search, $options: 'i'}
+      }
+      if(category && category != 'all'){
+        query.category = category
+      }
+      const result = await cqCollection.find(query).toArray();
+      res.send(result)
+    })
     // package API
     app.get('/allPackages', async(req,res)=>{
       const result = await packageCollection.find().toArray();
@@ -67,12 +88,24 @@ async function run() {
       const result = await userCollection.insertOne(data);
       res.send(result)
     })
-
-    // cq API
-    app.get('/cq', async(req,res)=>{
-      const result = await cqCollection.find().toArray();
+    app.get('/users', async (req,res)=>{
+      const result = await userCollection.find().toArray();
       res.send(result)
     })
+  
+    app.patch('/users/:email', async(req,res)=>{
+      const email = req.params.email;
+      const badge = req.body;
+      const filter = { email: email };
+      const updatedDoc = {
+        $set: badge
+      }
+      const options = { upsert: true };
+      const result = await userCollection.updateOne(filter, updatedDoc, options);
+      res.send(result)
+    })
+
+    
 
     // pdf collection
     app.post('/pdf', upload.any(), async (req, res) => {
@@ -106,6 +139,44 @@ async function run() {
           res.status(500).send({ error: 'Something went wrong' });
       }
   });
+
+  // wishlist API
+  app.post('/wishlist', async(req,res)=>{
+    const data = req.body;
+    const result = await wishlistCollection.insertOne(data);
+    res.send(result)
+  });
+  app.get('/wishlist', async(req,res)=>{
+    const result = await wishlistCollection.find().toArray();
+    res.send(result);
+  })
+  app.delete('/wishlist/:id', async (req,res)=>{
+    const id = req.params;
+    const result = await wishlistCollection.deleteOne(id);
+    res.send(result)
+  })
+
+  // payment intent
+  app.post('/create-payment-intent', async(req,res)=>{
+    const {price} = req.body;
+    const amount = Math.round(price * 100);
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount,
+      currency: 'usd',
+      payment_method_types: [
+        'card'
+      ]
+    })
+    res.send({
+      clientSecret: paymentIntent.client_secret
+    })
+  })
+  // payment API
+  app.post('/payment', async(req,res)=>{
+    const paymentInfo = req.body;
+    const result = await paymentCollection.insertOne(paymentInfo);
+    res.send(result)
+  })
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
 

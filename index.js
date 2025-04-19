@@ -3,11 +3,11 @@ const express = require('express');
 const app = express();
 const cors = require('cors');
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_KEY)
 
 const corsOptions = {
-  origin: ['http://localhost:5173', 'https://online-examination-system-server.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://online-examination-system-server.vercel.app'],
   credentials: true,
 };
 app.use(cors(corsOptions));
@@ -39,7 +39,8 @@ async function run() {
     const cqCollection = dbCollection.collection('cq');
     const pdfCollection = dbCollection.collection('pdf');
     const paymentCollection = dbCollection.collection('payments');
-    const wishlistCollection = dbCollection.collection('wishlist')
+    const wishlistCollection = dbCollection.collection('wishlist');
+    const sessionCollection = dbCollection.collection('session')
 
     app.get('/exams', async (req,res)=>{
       const search = req.query.search || '';
@@ -147,12 +148,20 @@ async function run() {
     res.send(result)
   });
   app.get('/wishlist', async(req,res)=>{
-    const result = await wishlistCollection.find().toArray();
+    const email = req.query.email;
+    const result = await wishlistCollection.find({ email }).toArray();
     res.send(result);
   })
   app.delete('/wishlist/:id', async (req,res)=>{
-    const id = req.params;
-    const result = await wishlistCollection.deleteOne(id);
+    const {id} = req.params;
+    const query = {_id: new ObjectId(id)}
+    const result = await wishlistCollection.deleteOne(query);
+    res.send(result)
+  })
+
+  // session API
+  app.get('/session', async (req,res)=>{
+    const result = await sessionCollection.find().toArray();
     res.send(result)
   })
 

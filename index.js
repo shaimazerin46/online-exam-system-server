@@ -7,10 +7,20 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const stripe = require('stripe')(process.env.STRIPE_KEY)
 
 const corsOptions = {
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'https://online-examination-system-server.vercel.app'],
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:5174',
+    'https://online-exam-system-f2b2b.web.app',
+    'https://online-examination-system-server.vercel.app'
+  ],
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 };
 app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 const multer = require('multer');
@@ -55,6 +65,33 @@ async function run() {
         const result = await examCollection.find(query).toArray();
         res.send(result)
     });
+    app.post('/exams', async (req,res)=>{
+      const data = req.body;
+      const result = await examCollection.insertOne(data);
+      res.send(result)
+    })
+    app.patch('/exams/:id', async(req,res)=>{
+      const id = req.params.id
+      const data = req.body;
+      const filter = {_id: new ObjectId(id)};
+      const updatedDoc = {
+        $set: {
+          name: data.name,
+          category: data.category,
+          image: data.image,
+          description: data.description,
+          questions: data.questions,
+        }
+      }
+      const result = await examCollection.updateOne(filter, updatedDoc);
+      res.send(result)
+    })
+    app.delete('/exams/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await examCollection.deleteOne(query);
+      res.send(result)
+    })
 
     // cq API
     app.get('/cq', async(req,res)=>{
@@ -70,6 +107,40 @@ async function run() {
       const result = await cqCollection.find(query).toArray();
       res.send(result)
     })
+    app.post('/cq', async(req,res)=>{
+      const data = req.body;
+      const result = await cqCollection.insertOne(data);
+      res.send(result)
+    });
+    app.patch('/cq/:id', async (req, res) => {
+      const id = req.params.id;
+      const data = req.body;
+    
+      try {
+        const filter = { _id: new ObjectId(id) };
+        const updateDoc = {
+          $set: {
+            name: data.name,
+            category: data.category,
+            image: data.image,
+            description: data.description,
+            questions: data.questions
+          }
+        };
+    
+        const result = await cqCollection.updateOne(filter, updateDoc);
+        res.send(result);
+      } catch (err) {
+        res.status(500).send({ message: "Update failed", error: err.message });
+      }
+    });
+    app.delete('/cq/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)};
+      const result = await cqCollection.deleteOne(query);
+      res.send(result)
+    })
+
     // package API
     app.get('/allPackages', async(req,res)=>{
       const result = await packageCollection.find().toArray();
@@ -80,6 +151,10 @@ async function run() {
     app.post('/results', async(req,res)=>{
       const userInfo = req.body;
       const result = await resultCollections.insertOne(userInfo);
+      res.send(result);
+    })
+    app.get('/results', async(req,res)=>{
+      const result = await resultCollections.find().toArray();
       res.send(result);
     })
 
@@ -104,15 +179,27 @@ async function run() {
       const options = { upsert: true };
       const result = await userCollection.updateOne(filter, updatedDoc, options);
       res.send(result)
-    })
-
+    });
     
-
+    app.patch('/users/admin/:id', async(req,res)=>{
+      const id = req.params.id;
+      const filter = {_id: new ObjectId(id)};
+      const updatedDoc ={
+        $set: {
+          role: 'admin'
+        }
+      }
+      const options = { upsert: true };
+      const result = await userCollection.updateOne(filter,updatedDoc,options);
+      res.send(result)
+    });
     // pdf collection
     app.post('/pdf', upload.any(), async (req, res) => {
       try {
           const examId = req.body.examId;
           const examName = req.body.examName;
+          const email = req.body.email;
+          const marks = req.body.totalMarks
   
           const answers = [];
   
@@ -122,16 +209,18 @@ async function run() {
                   const index = indexMatch[1];
                   answers.push({
                       fileName: file.originalname,
-                      fileBuffer: file.buffer, // You can convert or store this
+                      fileBuffer: file.buffer, 
                       
                   });
               }
           }
   
           const result = await pdfCollection.insertOne({
+              email,
               examId,
               examName,
-              answers
+              answers,
+              marks
           });
   
           res.send({ insertedId: result.insertedId });
@@ -140,6 +229,25 @@ async function run() {
           res.status(500).send({ error: 'Something went wrong' });
       }
   });
+
+  app.get('/pdf', async(req,res)=>{
+    const result = await pdfCollection.find().toArray();
+    res.send(result);
+  }) 
+
+  app.patch('/pdf/:id', async (req,res)=>{
+    const id = req.params.id;
+    const { givenMarks } = req.body;
+    const filter = {_id: new ObjectId(id)};
+    const updatedDoc = {
+      $set: {
+        givenMarks: givenMarks
+      }
+    }
+    const options = { upsert: true };
+    const result = await pdfCollection.updateOne(filter,updatedDoc,options)
+    res.send(result)
+  })
 
   // wishlist API
   app.post('/wishlist', async(req,res)=>{
@@ -162,6 +270,34 @@ async function run() {
   // session API
   app.get('/session', async (req,res)=>{
     const result = await sessionCollection.find().toArray();
+    res.send(result)
+  })
+  app.post('/session', async (req,res)=>{
+    const data = req.body;
+    const result = await sessionCollection.insertOne(data);
+    res.send(result)
+  })
+  app.patch('/session/:id', async(req,res)=>{
+    const id = req.params.id;
+    const data = req.body;
+    const filter = {_id: new ObjectId(id)}
+    const updatedDoc = {
+      $set: {
+        title: data.title,
+        description: data.description,
+        speaker: data.speaker,
+        scheduledTime: data.scheduledTime,
+        durationMinutes: data.durationMinutes,
+        link: data.link
+      }
+    }
+    const result = await sessionCollection.updateOne(filter, updatedDoc);
+    res.send(result)
+  })
+  app.delete('/session/:id', async(req,res)=>{
+    const id = req.params.id;
+    const query = {_id: new ObjectId(id)}
+    const result = await sessionCollection.deleteOne(query);
     res.send(result)
   })
 

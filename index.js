@@ -322,6 +322,10 @@ async function run() {
     const result = await paymentCollection.insertOne(paymentInfo);
     res.send(result)
   })
+  app.get('/payment', async(req,res)=>{
+    const result = await paymentCollection.find().toArray();
+    res.send(result)
+  })
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
 
 
